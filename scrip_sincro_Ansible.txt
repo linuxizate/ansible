@@ -1,0 +1,122 @@
+# LOS FICHEROS .YML PARA HACER LAS SINCROS ESTAN EN /etc/ansible/playbook 
+# ESTOS SCRIPS SE LANZAN CON EL SIGUIENTE COMANDO:  /usr/bin/ansible-playbook /etc/ansible/playbook/sincro_que_sea.yml 
+
+
+#- hosts: 127.0.0.1
+#  vars:
+#    web: MUYINTERESANTE
+#    mail: sincrowebmuy@gyj.es
+#
+#  connection: local
+#  tasks:
+#    - name: Correo Inicio de SINCRO {{ web }}
+#      command: /usr/local/bin/envio_correo_sincro.sh {{ web }} {{ mail }}
+#
+#    # Pause Esperamos 5 minutos despues de mandar el correo
+#    - pause: minutes=5
+
+########### PRIEMRA FASE, PARADA Y SINCRO DE LOS SERVIDORES DEL POOL1  ######### 		--> Este pool "grupo1" está definido en /etc/ansible/hosts  Aquí definimos los host y le pasamos la key de SSH
+- hosts: grupo1
+  vars:
+    src: /var/www/muyinteresante/
+    dest: /var/www/muyinteresante
+    clean: /var/www/muyinteresante/clean_debug.sh
+  remote_user: root
+  tasks:
+    - name: Parar MONIT										# --> Paramos MONIT para que NO nos arranque los apache al verlos caidos. 
+      service:
+        name: monit
+        state: stopped
+
+    - name: Apagar Apache									# --> Paramos Apache para que coja los cambios. 
+      service: name=apache2_ansible state=stopped
+
+    - name: Sincronizar										# --> Lanzamos la sincro.
+      synchronize: src={{ src }} dest={{ dest }} delete=yes
+      ### para los excludes usamos el fichero .rsync-filter en el directorio raiz de src	# --> LEER ABAJO!!
+
+    - name: Limpiar cache									# --> Limpiamos la cache para que coja bien los cambios.
+      command: "{{ clean }}"
+
+    - name: Arrancar Apache									# --> Arrancamos los Apache
+      service: name=apache2_ansible state=started
+
+    - name: Arrancar MONIT									# --> Arrancamos MONIT.
+      service:
+        name: monit
+        state: started
+
+########## SEGUNDA FASE, PARAR MONIT Y APACHE DEL POOL2 #############				# --> Repetimos el proceso. 
+- hosts: grupo2
+  vars:
+    src: /var/www/muyinteresante/
+    dest: /var/www/muyinteresante
+    clean: /var/www/muyinteresante/clean_debug.sh
+  remote_user: root
+  tasks:
+    - name: Parar MONIT
+      service:
+        name: monit
+        state: stopped
+
+    - name: Apagar Apache
+      service: name=apache2_ansible state=stopped
+
+    - name: Sincronizar
+      synchronize: src={{ src }} dest={{ dest }} delete=yes
+      ### para los excludes usamos el fichero .rsync-filter en el directorio raiz de src
+
+    - name: Limpiar cache
+      command: "{{ clean }}"
+
+    - name: Arrancar Apache
+      service: name=apache2_ansible state=started
+
+    - name: Arrancar MONIT
+      service:
+        name: monit
+        state: started
+
+
+
+
+
+
+
+
+## Para excluir directorios nos vamos al directorio raiz de src /var/www/muyinteresante/ (Es en el server desde donde se 
+lanzan las syncros).
+
+	Editamos el fichero .rsync-filter, que tiene la siguiente estructura:
+- .git
+- .svn
+- .gitignore
+- composer.lock
+- composer.phar
+- /app/bootstrap_cache.php.cache
+- /app/config/parameters.ini
+- /app/config/parameters.yml
+- /app/cache/*
+- /app/logs/*
+- /web/bundles/*
+- /web/uploads/*
+- /web/media/*
+- /web/css/*
+- /web/js/*
+- /web/images/ftp/*
+- /web/tmp
+- /app/var/*
+- /uploads
+
+
+Añadimos el path que queremos excluir y listo. 
+
+
+
+
+
+
+
+
+		
+
