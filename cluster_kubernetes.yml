@@ -1,0 +1,41 @@
+---
+- hosts: kubernetes_cluster
+  vars:
+    comando1: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+    src1: /etc/apt/sources.list.d/kubernetes.list
+    des1: /etc/apt/sources.list.d
+    comando3: kubeadm init
+    comando4: chown $(id -u):$(id -g) $HOME/.kube/config
+    src: /etc/kubernetes/admin.conf
+    des: /root/.kube
+  tasks:
+  - name: Preparar entorno
+    apt: name=apt-transport-https state=latest
+  - name: Añadir repositorio
+    command: "{{ comando1 }}"
+  - name: Añadir repositorio de kubernetes
+    copy: src={{ src1 }} dest={{ des1 }}
+  - name: Instalando Kubernetes
+    apt: name={{ item }} state=latest
+    with_items:
+      - kubelet
+      - kubeadm
+      - kubectl
+      - docker.io
+- hosts: master
+  vars:
+    comando3: kubeadm init
+    comando4: chown $(id -u):$(id -g) $HOME/.kube/config
+    src: /etc/kubernetes/admin.conf
+    des: /root/.kube
+  - name: Arrancando kubernetes
+    command: "{{ comando3 }}"
+  - name: Creando el entorno kubernetes
+    file:
+      path: /root/.kube
+      state: directory
+      mode: 755
+  - name: Configurando entorno kuberetes
+    copy: src={{ src }} dest={{ des }}
+  - name: Configurando entorno permisos
+    command: "{{ comando4 }}"
