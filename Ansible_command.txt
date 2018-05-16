@@ -1,0 +1,560 @@
+######################		COMANDOS DE ANSIBLE		################################
+
+https://www.ansible.com/hubfs/-2016-ebooks/ansible-for-devops-first-four-chapters.pdf
+
+CREACION DE GRUPOS:
+
+# ansible ubuntu_test -m group -a "name=admin state=present system=yes"
+
+** Creamos un grupo admin con privilegios de root en el grupo de maquinas de ubuntu_test
+	-m group --> para crear un grupo
+	-a 	 --> para lanzar los comandos
+	name=admin 	--> nombre del grupo
+	state=present	--> debe de existir
+	system=yes	--> miembro de sudoers
+
+
+CREACION DE USUARIOS:
+
+# ansible ubuntu_test -m user -a "name=jesus group=admin createhome=yes shell=/bin/bash password=developer2020"
+
+** Creamos un usuario, en este caso Jesus perteneciente al grupo admin con la shell de bash en el grupo de servidores ubuntu_test
+	** OJO la passwd no ha funcionado, tendremos que crearla luego en el servidor.
+
+	- createhome=yes	--> para crear la home
+	
+
+ELIMINAR UN USUARIO:
+
+# ansible app -s -m user -a "name=javier state=absent remove=yes"
+
+** Aquí estamos eliminando el usuario Javier, OJO! no se si borramos la home, tendremo que mirarlo si llega el caso. 
+	-s 	--> le estamos diciendo que lance el comando son sudo. 
+
+
+
+
+LANZAR COMANDOS:
+
+# ansible all -a "uptime"
+
+** Aquí estamos lanzando este comando a todos los equipos que tenemos en el fichero de configuración hosts dentro de Ansible.
+
+** Podemos limitar dentro de un grupo de servidores con la opcin --limit al final, de esta forma el comando solo se lanza al
+	host que le digamos, por ejemplo, vamos a lanzar el comando date solo a un equipo. Podemos usar expresiones regulares.
+
+# ansible all -a "date" --limit FRONT40 
+# ansible all -a "date" --limit 172.16.40.88
+
+
+
+
+INSTALACION DE PAQUETES EN CUALQUIER DISTRO:
+
+# ansible app -s -m package -a "name=git state=present"
+
+** Aquí estamos instalando git, en cualquier distro de Linux. 
+
+
+
+FICHEROS Y DIRECTORIOS:
+
+
+# ansible ubuntu_test -m stat -a "path=/etc/environment" 
+
+** Aqui estamos viendo los permisos, propietarios, etc, etc... 
+
+
+Podemos filtar para que nos muestre solo el propietario y los permisos:
+
+# ansible ubuntu_test -m stat -a "path=/var/log/apache2" | grep -e "mode" -e "name" 
+
+
+COPIANDO FICHEROS Y DIRECTORIOS:
+
+Podemos usar el mod. copy de ansible para hacer los mismo que scp o rsync, copiamos desde una ruta en nuestro HOST (src)
+a un directorio de destino en el grupo que queramos (dest). 
+
+# ansible ubuntu_test -m copy -a "src=/etc/hosts dest=/tmp/hosts"
+
+	** Importante:
+		
+		- Si ponemos / al final del directorio, se copia el contenido de este en el destino.
+
+		- Si NO ponemos / al final, se copia el contenido y el propio directorio en el destino. 
+
+		- Para copiar grandes esctructuras es mejor usar otro mod. de Ansible, como synchronize o rsync. 
+
+
+
+
+
+COPIAR FICHEROS DESDE LOS SERVIDORES (EL GRUPO DE SERVIDORES) A NUESTRO HOST DE ANSIBLE:
+
+# ansible ubuntu_test -s -m fetch -a "src=/etc/hosts dest=/tmp"
+
+	** Este comando nos sirve para copiar ficheros desde el grupo de servidores (en este caso ubuntu_test) a nuestro host 
+de Ansible. En este caso dentro de /tmp nos creará una carpeta por cada IP de cada uno de los servidores del grupo, y dentro
+nos crea los directorio con el fichero que le hemos pasado como src. Ej: /tmp/172.16.40.34/etc/hosts
+	Si tuvieramos más servidores en el grupo nos hubiera creado un directorio por cada IP. 
+
+
+
+CREAR DIRECTORIOS Y FICHEROS:
+
+POdemos crear directorios, ficheros y enlaces:
+
+
+# ansible ubuntu_test -m file -a "dest=/tmp/test mode=644 state=directory"
+
+** Aquí estamos creando el directorio /tmp/test con los permisos 644.
+	- state=directory 	--> le estamos diciendo que sea un direcortio. 
+
+
+Para crear un enlace simbolico:
+
+# ansible ubuntu_test -m file -a "src=/src/symlink dest=/dest/symlink owner=root group=root state=link"
+
+** Aquí creamos el enlace, OJO, como vemos tenemos que darle el dest con el nombre del fichero que quereos. 
+	- state=link  	--> esto es para indicar el tipo de fichero en este caso es un link. 
+	- src=/path/al/fichero_original	--> este es el destino del acceso direccto o link
+	- dest=/path/al/fichero_link
+
+
+
+BORRAR DIRECTORIOS:
+
+# ansible ubuntu_test -m file -a "dest=/tmp/test state=absent"
+
+** Para borrar un dorectorio, lo único que tenemos que hacer es cambiar el state a absent. state=absent
+
+
+
+
+CHECK LOG FILE:
+
+Podemos usar el comando tail para ver los logs en todos los servidores que tengamos en nuestro host, o podemos usarlo
+para el grupo o server que queramos. Para ello desde nuestro host de Ansible, lanzamos el siguiente comando:
+
+# ansible all -a "tail /var/log/apache2/error.log" 
+
+** En este caso vamos a ver todos los log de error de Apache2 en todos los servidores que tenemos definidos en nuestro 
+Ansible.
+
+	** OJO!! No podemos usar la opción tail -f, esto es porque Ansible solo muestra la salida después de que termine
+	un comando
+	** OJO!! Tampoco es buena idea si nos va a mostrar un gran numero de lineas, para esto es mejor entrar de uno en uno 
+	en los servidores.
+
+
+
+
+ADMINISTRAR CRON JOBS:
+
+Esto es muy útil si queremos programar una tarea para que se ejecute en todos los servidores, ejemplo: subir los ficheros 
+de los logs a oncrawl. Tendremos que tener el escrip ya listo y saber la ruta. 
+
+# ansible ubuntu_test -m cron -a "name=prueba_cron minute=0 hour=4 job=/root/prueba_cron.sh"
+
+**COn este comando estamos configurando un cron, el cron se llamará prueba_cron se realizará a las 4 y ejecuta el scrip 
+ /root/prueba_cron.sh
+
+	** Si no ponemos nada se entienden que son * es decir, en este job le decimos que se ejecte a las 4 en punto 
+	todos los dias. 
+	
+	** El formato es: day,hour,minute,month, and weekday 
+
+
+Para eliminar un cron:
+
+# ansible ubuntu_test -s -m cron -a "name='daily-cron-all-servers' state=absent"
+
+** Una vez más lo que tenemos que poner es state=absent para eliminar algo!
+
+
+
+
+
+
+
+###################################	PLAYBOOKS ON ANSIBLE	#############################################
+
+
+
+Vemos un playbook para ver como está estructurado:
+
+
+---
+
+- hosts: all
+  become: yes
+  tasks:
+    - name: Install Apache.
+      yum: name={{ item }} state=present
+	  with_items:
+        - httpd
+        - httpd-devel
+    - name: Copy configuration files.
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: 0644
+      with_items:
+        - src: "httpd.conf"
+          dest: "/etc/httpd/conf/httpd.conf"
+        - src: "httpd-vhosts.conf"
+          dest: "/etc/httpd/conf/httpd-vhosts.conf"
+    - name: Make sure Apache is started now and at boot.
+      service: name=httpd state=started enabled=yes
+
+
+** become: es para decirle a Ansible que lance los comandos como sudo.
+
+** tasks: es para definir las tareas que vamos a realizar en este playbook. Si en un mismo playbook vamos a lanzar diferenntes 
+tareas para diferentes hosts tendremos que volver a declarar la teras tasks. Pero para lanzar varias tareas para un mismo grupo
+de servidores no tenemos que delaclar la etiqueta nada mas que una vez. 
+
+** name: Esto es solo para que sepamos lo que estamos haciendo, para los humanos. No es obligatorio, pero nos vale para saber lo 
+lo que estamos haciendo (en los logs y en la consola).
+
+** Usamos los modulos de Ansible para instalar software, en este caso el mod se llama "yum" puesto que estamos realizando la instalación 
+en maquinas RHEL, si fueran Debian usariamos el mod "apt". 
+
+** item: es para declarar un Array, luego usamos with_items: para declarar los elementos del array. OJO como declara los elementos
+del Array (para ver la diferencia entre un Array y otro). 
+
+** We tell yum to make sure the packages we define are installed with state=present, but we could also use state=latest 
+to ensure the latest version is installed, or state=absent to make sure the package is not installed.
+
+** Usamos el mod de "copy" para copiar los ficheros de configuración, estos ficheros estarán en nuestra maquina local "src" y luego 
+le damos el destino en la maquina con la variable "dest". En este caso estamos copiando los ficheros "httpd.conf" que tenemos en nuestra 
+maquina al grupo de servidores en la ruta que le especifiquemos en el la variable "dest" que este caso está en el Array. 
+
+** service: Por último nos aseguramos que el servicio de apache está levantado y que además se levantará al reiniciar la máquina, para 
+ello usamos el mod de Ansible "service" luego le damos le nombre del servicio con name:httpd y despues el state=started y por último le decimos
+que se levante al reiniciar con enable=yes  
+
+
+
+
+**** Cuando llamamos a variables, como src o dest, o las que declaremos, estas irán entre {{ var }}. 
+
+
+
+LIMITAR PLAYBOOK A UN HOST O GRUPO DE HOST LIMITADO:
+
+POdemos limitar un playbook a un grupo específico de host cambiando el valor de hosts: valor. Podemos poner all (para que se
+lance a todos los hosts que tengamos definidos en el el fichero hosts de Ansible), un "grupo de host" que tengamos definido en 
+el inventario (archivo hosts de Ansible), varios grupos de hosts o un mix. Podemos utilizar expresiones regulares *.example.com
+
+Si queremos ver una lista de los hosts a los que va a afectar nuestro playbook podemos lanzar el playbook con la siguiente 
+opción --list-hosts y no dará una lista con los servidores a los que se va a aplicar el playbook.
+
+# ansible-playbook playbok_prueba.yml --list-hosts
+
+El resultado será algo pareceido a:
+
+play #1 (all): host count=4
+127.0.0.1
+192.168.24.2
+foo.example.com
+bar.example.com
+
+
+
+A la hora de lanzar un playbook también podemos definir el usuario remoto con el que vamos a realizar las tereas definidas en el 
+playbook. Para ello tenemos que poner la opción --remote-user=javier.
+
+# ansible-playbook mi_playbook.yml --remote-user=javier
+
+Podemos comprobar lo que hace el playbook añadiendo al final la opcion --check de esta forma se lanza el playbook pero no realiza los
+cambios, solo lo checkea.
+
+# ansible-playbook prueba_ubuntu_install_monit.yml --check
+
+
+INSTALAR REPOSITORIO CON PLAYBOOK:
+
+Podemos instalar un repos nuevo mediante playbook añadinedo la firma y todo, para ello lo vemos con un ejemplo:
+
+
+
+---
+- hosts: all
+  tasks:
+    - name: Instalar repositorio Remi en CentOS
+      yum:
+        name: "http://rpms.remirepo.net/enterprise/remi-release-7.rpm"
+        state: present
+    - name: importar Remi key GPG
+      rpm_key:
+        key: "http://rpms.remirepo.net/RPM-GPG-KEY-remi"
+        state: present
+    - name: Instalar repositorio EPEL
+      yum: name=epel-release state=present
+         
+
+** Aquí primero añadimos el repositorio REMI y sus GPG y luego el repo de EPEL (para este no tenemos que instalar el gpg ni nada). 
+
+
+INSTALAR PAQUETES EN UBUNTU/DEBIAN:
+
+Vamos a verlo con un ejemplo de playbook.
+
+---
+- hosts: ubuntu_test
+  vars:
+    src: /etc/monit/conf-available/apache2
+    dest: /etc/monit/conf-enabled/apache2
+    fuente: /etc/monit/conf-available/openssh-server
+    destino: /etc/monit/conf-enabled/openssh-server
+  handlers:
+    - name: restart monit
+      service: name=monit state=restarted
+  pre_tasks:
+    - name: update apt-cache
+      apt: update_cache=yes cache_valid_time=3600
+  tasks:
+    - name: Instalar monit
+      apt: name=monit state=latest
+    - name: Activando monitorizacion de apache2
+      file: >
+        dest={{ dest }}
+        src={{ src }}
+        state=link
+    - name: Activando monitorizacion de ssh
+      file: >
+        dest={{ destino }}
+        src={{ fuente }}
+        state=link
+      notify: restart monit
+
+
+
+** Aquí estamos añadiendo variables, handlers, pre_tasks y al final notify, vamos a explicarlo a continuación.
+
+	- vars: nos sirve para declarar variables, en un par nombre-valor
+	- handlers: va acompañado de notify, y sirve para que cuabdo encuentre un notify se ejecute el handlers, en este ejemplo 
+		reiniciamos monit una vez hemos activado lo que queremos monitorizar.
+	- pre_tasks: son tareas que se ejecutan previamente. 
+	- notify: aquí decimos que al terminar esta tarea se ejecute el handlers que hemos declarado anteriormente (ponemos el nombre, en
+		este caso: restart monit).
+
+
+
+UTILIACION DE ITEMS: (catálogo)
+
+---
+- hosts: all
+  tasks:
+    - name: Get software for apt repository
+      apt: name={{ item }} state=present
+      with_items:
+        - python-apt
+        - python-pycurl
+
+
+    - name: Instalar Apache, MySQL, PHP y otras dependencias
+      apt: name={{ item }} state=present
+      with_items:
+        - git
+        - curl
+        - sendmail
+        - apache2
+        - php7.0-common
+        - libapache2-mod-php7.0
+        - php7.0-mysql
+        - python-mysqldb
+        - mysql-server
+
+    - name: start apache, MySQL y PHP
+      service: "name={{ item }} state=started enable=yes
+      with_items:
+        - apache2
+        - mysql
+
+
+
+** Como podemos ver en el ejemplo le pasamos un catalogo o array de elementos al comando con item y luego definimos los elementos del 
+array con with_items:
+
+ 
+
+
+CONFIGURACIONES DE APACHE CON ANSIBLE:
+
+Ansible tiene su propio mod de apache para gestionar los modulos de Apache, este es: apache2_module , lo vemos:
+
+- name: Enable Apache rewrite module (requiered for Wordpress)
+  apache2_module: name=rewrite state=presnt
+  notify: restart apache
+
+- name: Add Apache virtualhost 
+  template:
+    src: "templates/virtualhost.conf.j2"
+    dest: "/etc/apache2/site-available/{{ domain }}.dev.conf"
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart apache
+ 
+- name: Enlace para activar el virtualhost
+  file: 
+    src: "/etc/apache2/site-available/{{ domain }}.dev.conf"
+    dest: "/etc/apache2/site-enabled/{{ domain }}.dev.conf"
+    state: link
+  notify: restart apache
+
+- name: Remove default virtuahost file.
+  file:
+    path: "/etc/apache2/site-enabled/000-default.conf"
+    state: absent
+  notify: restart apache
+
+
+** Vemos lo que hace el playbook:
+
+	- El primer comando es para activar el modulo de apache de rewrite, hace el link de /etc/apache2/mod-available a mod-enabled.
+	- El segundo es para copia la plantilla de virtualhost que tenemos en el host de Ansible (Ojo con la ruta) esta plantilla estará
+		en una carpeta llamada templates, en la ruta de apache /etc/apache2/site-available/nombre_dominio.dev.conf. Además le 
+		damos el propietario, el grupo y los permisos que queremos que tenga el fichero.
+
+		Tenemos además "notify: restart apache" esto es un handler para reiniciar Apache. Tendremos que definir en el playbook 
+		El handler.
+	- Despues activamos el virtuahost haciendo el enlace desde availabe a enabled. Y reinicio.
+	- Por ultimo quitamos el 000-default.conf. Y reinicio. 
+
+
+
+
+CONFIGURACION MYSQL:
+
+Ahora vamos a ver como configurar MySQL (eliminando BBDD, creando BBDD y usuarios). Como antes lo vemos con un ejemplo.
+
+- name: Eliminando BBDD de test
+  mysql_db: db=test state=absent
+
+- name: Creamos la BBDD 
+  mysql_db: db={{ nombre }} state=present
+
+- name: Creacion del usuario.
+  mysql_user:
+    name: "{{ usuario }}"
+    password: "12345"
+    priv: "{{ nombre }}.*:ALL"
+    host: localhost
+    state: present
+
+
+** Vemos lo que hacemos con este playbook:
+
+	- En el primer comando estamos eliminando la BBDD de test, para lo cual Ansible usa el mod de Mysql. Ansible tiene mod para
+		muchos motores de BBDD (MongoDB, MySQL, MariaDB, PostgreSQL, Redis)
+	- Despues creamos la BBDD con el nombre que le pasemos por variable.
+	- Y por último creamos el usuario, le damos permisos y definimos desde donde se conecta. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
